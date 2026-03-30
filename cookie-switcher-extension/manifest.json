@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Trinh Chuyen Doi Tai Khoan Cookie",
+  "version": "1.0.0",
+  "description": "Luu ho so cookie va chuyen doi tai khoan nhanh.",
+  "permissions": [
+    "cookies",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Chuyen Doi Cookie",
+    "default_popup": "popup.html"
+  }
+}

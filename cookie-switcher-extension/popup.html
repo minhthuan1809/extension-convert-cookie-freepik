@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trinh Chuyen Doi Cookie</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app-header">
+        <h1>Trinh Chuyen Doi Cookie</h1>
+        <p class="sub">Luu nhanh - chuyen nhanh</p>
+      </header>
+
+      <section class="card compact">
+        <h2>Dong Bo Database</h2>
+        <div class="api-row">
+          <input id="apiUrl" type="text" placeholder="API URL (Backend)" />
+          <button id="saveApiBtn" class="secondary">Luu URL</button>
+        </div>
+        <div class="row">
+          <button id="capturePushBtn">Lay cookie len Database</button>
+          <button id="pushCloudBtn">Day len Database</button>
+          <button id="pullCloudBtn" class="secondary">Lay tu Database</button>
+        </div>
+        <div class="row">
+          <button id="exportBtn" class="secondary">Export Backup</button>
+          <button id="importBtn" class="danger">Import Backup</button>
+          <input id="importFile" type="file" accept="application/json" style="display: none" />
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Danh Sach Ho So</h2>
+        </div>
+        <div id="profiles" class="profiles"></div>
+      </section>
+
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

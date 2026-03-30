@@ -1,0 +1,11 @@
+node_modules/
+backend/node_modules/
+
+# SQLite database files (không nên commit)
+*.sqlite
+backend/*.sqlite
+
+# Env/config local
+.env
+.env.*
+
