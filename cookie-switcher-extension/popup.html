@@ -9,25 +9,31 @@
   <body>
     <main class="app">
       <header class="app-header">
-        <h1>Trinh Chuyen Doi Cookie</h1>
-        <p class="sub">Luu nhanh - chuyen nhanh</p>
+        <div class="title-left">
+          <div class="title-row">
+            <img
+              class="logo"
+              src="download.png"
+              alt="Freepik logo"
+              width="120"
+              height="24"
+            />
+            <h1>Trinh Chuyen Doi Cookie</h1>
+          </div>
+          <p class="sub">Luu nhanh - chuyen nhanh</p>
+        </div>
       </header>
-
       <section class="card compact">
-        <h2>Dong Bo Database</h2>
-        <div class="api-row">
-          <input id="apiUrl" type="text" placeholder="API URL (Backend)" />
-          <button id="saveApiBtn" class="secondary">Luu URL</button>
-        </div>
+        <h2>Luu Cookie Len Database</h2>
         <div class="row">
-          <button id="capturePushBtn">Lay cookie len Database</button>
-          <button id="pushCloudBtn">Day len Database</button>
-          <button id="pullCloudBtn" class="secondary">Lay tu Database</button>
-        </div>
-        <div class="row">
-          <button id="exportBtn" class="secondary">Export Backup</button>
-          <button id="importBtn" class="danger">Import Backup</button>
-          <input id="importFile" type="file" accept="application/json" style="display: none" />
+          <button id="capturePushBtn">
+            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 2 9.5 5H4v16h16V5h-5.5L12 2Zm1 14.5-4-4 1.4-1.4L13 13.2l4.6-4.6L19 10l-6 6.5Z"
+              />
+            </svg>
+            <span class="btn-text">Lay cookie len Database</span>
+          </button>
         </div>
       </section>
 

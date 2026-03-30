@@ -15,5 +15,11 @@
   "action": {
     "default_title": "Chuyen Doi Cookie",
     "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "download.png",
+    "32": "download.png",
+    "48": "download.png",
+    "128": "download.png"
   }
 }

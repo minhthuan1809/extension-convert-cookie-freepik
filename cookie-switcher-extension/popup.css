@@ -30,9 +30,28 @@ h2 {
 
 .app-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: flex-start;
   margin-bottom: 8px;
+  gap: 10px;
+}
+
+.title-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo {
+  display: block;
+  height: 22px;
+  width: auto;
 }
 
 .sub {
@@ -113,6 +132,10 @@ textarea {
   flex-wrap: wrap;
 }
 
+.card.compact .row button {
+  width: 100%;
+}
+
 button {
   border: 0;
   border-radius: 6px;
@@ -124,6 +147,10 @@ button {
   background: #3064ff;
   color: #fff;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 button.secondary {
@@ -137,6 +164,47 @@ button.danger {
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.btn-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  flex: 0 0 auto;
+  fill: currentColor;
+}
+
+.btn-text {
+  flex: 0 0 auto;
+}
+
+#currentAccount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-weight: 700;
+}
+
+#currentAccount .btn-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.profile-item .row button.active {
+  background: #1c8a3a;
+}
+
+.profile-item .row button.active:disabled {
+  opacity: 1;
+}
+
+.profile-item .row button.expired {
+  background: #c53228;
+}
+
+.profile-item .row button.expired:disabled {
+  opacity: 1;
 }
 
 .profiles {

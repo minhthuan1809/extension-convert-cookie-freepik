@@ -1,6 +1,9 @@
 const API_URL_KEY = "cloudApiUrl";
 const DEFAULT_API_URL = "http://localhost:3000/api";
 let runtimeProfiles = [];
+let currentActiveProfileId = "";
+let currentActiveProfileName = "";
+let currentActiveIsExpired = false;
 
 const profileNameInput = document.getElementById("profileName");
 const cookieJsonInput = document.getElementById("cookieJson");
@@ -16,6 +19,11 @@ const pushCloudBtn = document.getElementById("pushCloudBtn");
 const pullCloudBtn = document.getElementById("pullCloudBtn");
 const profilesContainer = document.getElementById("profiles");
 const statusEl = document.getElementById("status");
+const currentAccountEl = document.getElementById("currentAccount");
+const currentAccountTextEl = document.getElementById("currentAccountText");
+
+const ACTIVE_BY_HOST_KEY = "activeByHostProfile";
+const CURRENT_ACCOUNT_RECHECK_DELAY_MS = 1500;
 
 init();
 
@@ -38,8 +46,11 @@ function init() {
 
 async function bootstrapCloudData() {
   await loadApiUrl();
-  setStatus("Dang tai du lieu tu Database...");
+  setStatus("Dang tai danh sach ho so...");
   await onPullCloud();
+  await updateCurrentAccountIndicator();
+  // Cap nhat label nut theo tai khoan dang dung.
+  await renderProfiles();
 }
 
 async function loadApiUrl() {
@@ -183,7 +194,9 @@ async function onImportFile(event) {
       return;
     }
     await onPullCloud();
-    setStatus(`Da nhap file va luu ${profilesToSave.length} ho so len Database.`);
+    setStatus(
+      `Da nhap file va luu ${profilesToSave.length} ho so len Database.`,
+    );
   } catch (error) {
     setStatus(`Nhap that bai: ${error.message}`, true);
   } finally {
@@ -307,9 +320,9 @@ async function onPullCloud() {
 
     runtimeProfiles = pulledProfiles;
     await renderProfiles();
-    setStatus(`Da lay ${pulledProfiles.length} ho so tu Database.`);
+    setStatus(`Da tai ${pulledProfiles.length} ho so.`);
   } catch (error) {
-    setStatus(`Lay tu Database that bai: ${error.message}`, true);
+    setStatus(`Tai danh sach that bai: ${error.message}`, true);
   }
 }
 
@@ -372,14 +385,18 @@ async function onExportBackup() {
         };
       })
       .filter(
-        (item) =>
-          typeof item?.url === "string" && Array.isArray(item?.cookies),
+        (item) => typeof item?.url === "string" && Array.isArray(item?.cookies),
       );
 
     const fileText = JSON.stringify(exportItems, null, 2);
-    const safeDate = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const safeDate = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace(/[:T]/g, "-");
     const filename = `cookie-backup-${safeDate}.json`;
-    const blob = new Blob([fileText], { type: "application/json;charset=utf-8" });
+    const blob = new Blob([fileText], {
+      type: "application/json;charset=utf-8",
+    });
     const blobUrl = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -394,6 +411,25 @@ async function onExportBackup() {
   } catch (error) {
     setStatus(`Xuat backup that bai: ${error.message}`, true);
   }
+}
+
+function createIconSvg(kind) {
+  const paths = {
+    check: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z",
+    swap: "M7 7h10l-3-3 1.4-1.4L22 8l-6.6 5.4L14 12l3-3H7V7Zm10 10H7l3 3-1.4 1.4L2 16l6.6-5.4L10 16l-3 3h10v-2Z",
+    trash: "M6 7h12l-1 14H7L6 7Zm3-3h6l1 2H8l1-2Z",
+  };
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("btn-icon");
+
+  const pathD = paths[kind] || paths.swap;
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", pathD);
+  svg.appendChild(path);
+  return svg;
 }
 
 async function renderProfiles() {
@@ -430,12 +466,22 @@ async function renderProfiles() {
     actions.className = "row";
 
     const applyBtn = document.createElement("button");
-    applyBtn.textContent = "Chuyen sang tai khoan nay";
+    const isActive = profile.id && currentActiveProfileId === profile.id;
+    applyBtn.className = isActive ? "active" : "";
+    applyBtn.disabled = Boolean(isActive);
     applyBtn.addEventListener("click", () => onApplyProfile(profile.id));
+
+    const applyText = document.createElement("span");
+    applyText.className = "btn-text";
+    applyText.textContent = isActive ? "Dang dung" : "Chuyen";
+    applyBtn.appendChild(applyText);
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "danger";
-    deleteBtn.textContent = "Xoa tren Database";
+    const deleteText = document.createElement("span");
+    deleteText.className = "btn-text";
+    deleteText.textContent = "Xoa";
+    deleteBtn.appendChild(deleteText);
     deleteBtn.addEventListener("click", () => onDeleteProfile(profile.id));
 
     actions.appendChild(applyBtn);
@@ -477,6 +523,16 @@ async function onApplyProfile(profileId) {
   setStatus("Dang ap dung cookie, vui long doi...");
 
   try {
+    // Luu "lan ap dung gan nhat" de popup co the hien thi nhanh tai khoan phu hop.
+    if (target.hostname) {
+      setCurrentAccountIndicator(`Dang tai: ${profile.name}`);
+      await saveActiveProfileForHost(target.hostname, profile.id, profile.name);
+    }
+    // Hien thi ngay "Dang dung" cho profile vua duoc chuyen sang.
+    currentActiveProfileId = profile.id;
+    currentActiveProfileName = profile.name || "";
+    await renderProfiles();
+
     const relatedDomains = collectRelatedDomains(
       profile.data.cookies,
       target.hostname,
@@ -513,6 +569,14 @@ async function onApplyProfile(profileId) {
       `Da ap dung ho so ${profile.name}. Thanh cong ${successCount}, that bai ${failedCount}.`,
       failedCount > 0,
     );
+
+    // Sau khi reload/tab open, cookie co the duoc cap nhat. Recheck de hien thi "khop cookie".
+    setTimeout(() => {
+      (async () => {
+        await updateCurrentAccountIndicator();
+        await renderProfiles();
+      })().catch(() => {});
+    }, CURRENT_ACCOUNT_RECHECK_DELAY_MS);
   } catch (error) {
     setStatus(`Ap dung that bai: ${error.message}`, true);
   }
@@ -606,6 +670,246 @@ function validateCookiePayload(payload) {
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
   statusEl.className = `status ${isError ? "error" : "ok"}`;
+}
+
+function setCurrentAccountIndicator(message, isError = false) {
+  if (!currentAccountEl) return;
+  if (currentAccountTextEl) {
+    currentAccountTextEl.textContent = message;
+  } else {
+    currentAccountEl.textContent = message;
+  }
+  currentAccountEl.className = `status ${isError ? "error" : "ok"}`;
+}
+
+async function saveActiveProfileForHost(hostname, profileId, profileName) {
+  if (!hostname) return;
+  const stored = await chrome.storage.local.get(ACTIVE_BY_HOST_KEY);
+  const activeByHost = stored[ACTIVE_BY_HOST_KEY] || {};
+  activeByHost[hostname] = {
+    profileId: String(profileId || ""),
+    profileName: String(profileName || ""),
+    updatedAt: new Date().toISOString(),
+  };
+  await chrome.storage.local.set({ [ACTIVE_BY_HOST_KEY]: activeByHost });
+}
+
+async function getActiveTabHostname() {
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (!tab?.url) return "";
+  try {
+    return new URL(tab.url).hostname || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function buildCookieKey(cookie) {
+  const path =
+    typeof cookie?.path === "string" && cookie.path ? cookie.path : "/";
+  return `${cookie?.name || ""}|${path}`;
+}
+
+async function matchProfileByCookies(hostname) {
+  // So khop bang cookie name+path va gia tri cookie.
+  // Chi loc theo hostname de tranh so sanh qua nhieu.
+  const allCookies = await chrome.cookies.getAll({});
+  const actualByKey = new Map();
+
+  for (const cookie of allCookies) {
+    if (!cookie) continue;
+    if (typeof cookie.name !== "string" || typeof cookie.value !== "string")
+      continue;
+    if (typeof cookie.domain !== "string" || !cookie.domain.trim()) continue;
+    if (!cookieDomainMatchesHost(cookie.domain, hostname)) continue;
+
+    const key = buildCookieKey(cookie);
+    actualByKey.set(key, cookie.value);
+    if (actualByKey.size > 150) break; // gioi han de giam tai
+  }
+
+  if (actualByKey.size < 2) return null;
+
+  let best = null;
+  const MIN_MATCH_COUNT = 2;
+  const MIN_RATIO = 0.55;
+
+  for (const profile of runtimeProfiles) {
+    const profileUrl = profile?.data?.url;
+    const profileCookies = profile?.data?.cookies;
+    if (!profileUrl || !Array.isArray(profileCookies)) continue;
+
+    let profileHost = "";
+    try {
+      profileHost = new URL(profileUrl).hostname || "";
+    } catch (e) {}
+
+    if (profileHost && !cookieDomainMatchesHost(profileHost, hostname))
+      continue;
+
+    const storedByKey = new Map();
+    for (const c of profileCookies) {
+      if (!c) continue;
+      if (typeof c.name !== "string" || typeof c.value !== "string") continue;
+
+      if (typeof c.domain === "string" && c.domain.trim()) {
+        if (!cookieDomainMatchesHost(c.domain, hostname)) continue;
+      }
+
+      const key = buildCookieKey(c);
+      storedByKey.set(key, c.value);
+      if (storedByKey.size > 150) break;
+    }
+
+    if (storedByKey.size < 2) continue;
+
+    const comparedKeys = [];
+    for (const key of storedByKey.keys()) {
+      if (actualByKey.has(key)) comparedKeys.push(key);
+    }
+
+    if (comparedKeys.length < 2) continue;
+
+    let matchCount = 0;
+    for (const key of comparedKeys) {
+      if (actualByKey.get(key) === storedByKey.get(key)) {
+        matchCount += 1;
+      }
+    }
+
+    const ratio = matchCount / comparedKeys.length;
+    if (matchCount < MIN_MATCH_COUNT) continue;
+    if (ratio < MIN_RATIO) continue;
+
+    if (
+      !best ||
+      ratio > best.ratio ||
+      (ratio === best.ratio && matchCount > best.matchCount)
+    ) {
+      best = {
+        profileId: profile.id,
+        profileName: profile.name,
+        matchCount,
+        total: comparedKeys.length,
+        ratio,
+      };
+    }
+  }
+
+  return best;
+}
+
+async function updateCurrentAccountIndicator() {
+  setCurrentAccountIndicator("Dang tai: dang xac dinh ...");
+  try {
+    currentActiveIsExpired = false;
+    const hostname = await getActiveTabHostname();
+    if (!hostname) {
+      currentActiveProfileId = "";
+      currentActiveProfileName = "";
+      currentActiveIsExpired = false;
+      setCurrentAccountIndicator(
+        "Dang tai: chua xac dinh (khong tim thay tab hop le).",
+        true,
+      );
+      return;
+    }
+
+    const stored = await chrome.storage.local.get(ACTIVE_BY_HOST_KEY);
+    const activeByHost = stored[ACTIVE_BY_HOST_KEY] || {};
+    const last = activeByHost[hostname];
+
+    const best = await matchProfileByCookies(hostname);
+    if (best?.profileId) {
+      currentActiveProfileId = best.profileId;
+      currentActiveProfileName = best.profileName || "";
+      setCurrentAccountIndicator(
+        `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${
+          currentActiveIsExpired ? " | Het han" : ""
+        }).`,
+      );
+      // Kiem tra trang dang mo xem co nut "Upgrade" khong (du doan het han).
+      currentActiveIsExpired = await detectUpgradeButtonOnActiveTab();
+      setCurrentAccountIndicator(
+        `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${
+          currentActiveIsExpired ? " | Het han" : ""
+        }).`,
+      );
+      return;
+    }
+
+    // Fallback theo lan ap dung gan nhat.
+    if (last?.profileId) {
+      currentActiveProfileId = String(last.profileId);
+      currentActiveProfileName = String(last.profileName || "");
+      setCurrentAccountIndicator(
+        `Dang tai: ${currentActiveProfileName} (theo lan ap dung gan nhat).`,
+      );
+      currentActiveIsExpired = await detectUpgradeButtonOnActiveTab();
+      if (currentActiveIsExpired) {
+        setCurrentAccountIndicator(
+          `Dang tai: ${currentActiveProfileName} (theo lan ap dung gan nhat | Het han).`,
+        );
+      }
+      return;
+    }
+
+    currentActiveProfileId = "";
+    currentActiveProfileName = "";
+    currentActiveIsExpired = false;
+    setCurrentAccountIndicator("Dang tai: chua xac dinh.", true);
+  } catch (error) {
+    currentActiveProfileId = "";
+    currentActiveProfileName = "";
+    currentActiveIsExpired = false;
+    setCurrentAccountIndicator("Dang tai: khong the xac dinh.", true);
+  }
+}
+
+async function detectUpgradeButtonOnActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (!tab?.id) return false;
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: "MAIN",
+      func: () => {
+        const normalize = (s) =>
+          String(s || "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const hasUpgradeText = (el) => {
+          const text = normalize(el && el.textContent);
+          if (!text) return false;
+          return /Upgrade/i.test(text);
+        };
+
+        const byDataCy = document.querySelector('[data-cy="generate-button"]');
+        if (byDataCy && hasUpgradeText(byDataCy)) return true;
+
+        const candidates = Array.from(
+          document.querySelectorAll("button,a,[role='button']"),
+        );
+        for (const el of candidates) {
+          if (hasUpgradeText(el)) return true;
+        }
+
+        return false;
+      },
+    });
+
+    return Boolean(results?.[0]?.result);
+  } catch (e) {
+    return false;
+  }
 }
 
 async function saveProfileToCloud(profile) {
