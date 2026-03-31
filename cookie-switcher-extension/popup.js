@@ -593,7 +593,7 @@ async function onApplyProfile(profileId) {
 
   try {
     setStatus("Dang xoa du lieu tai khoan cu...");
-    await clearAllAccountArtifacts();
+    await clearAllAccountArtifacts(target);
 
     // Luu "lan ap dung gan nhat" de popup co the hien thi nhanh tai khoan phu hop.
     if (target.hostname) {
@@ -656,23 +656,97 @@ async function onApplyProfile(profileId) {
   }
 }
 
-async function clearAllAccountArtifacts() {
+async function clearAllAccountArtifacts(targetUrl) {
   // Xoa toan bo du lieu trinh duyet co the giu session dang nhap cu.
+  const targetOrigin = targetUrl?.origin || "";
+  const targetHostname = targetUrl?.hostname || "";
+
   const removeBrowsingData = chrome?.browsingData?.remove;
-  if (typeof removeBrowsingData !== "function") {
-    // Trong mot so lan popup chua duoc reload sau khi cap nhat permission.
-    return;
+  if (typeof removeBrowsingData === "function") {
+    await removeBrowsingData.call(chrome.browsingData, {}, {
+      cookies: true,
+      localStorage: true,
+      indexedDB: true,
+      cacheStorage: true,
+      serviceWorkers: true,
+      webSQL: true,
+      fileSystems: true,
+    });
   }
 
-  await removeBrowsingData.call(chrome.browsingData, {}, {
-    cookies: true,
-    localStorage: true,
-    indexedDB: true,
-    cacheStorage: true,
-    serviceWorkers: true,
-    webSQL: true,
-    fileSystems: true,
-  });
+  // Fallback bo sung de dam bao du lieu cua trang dich duoc don sach.
+  if (targetHostname) {
+    const cookies = await chrome.cookies.getAll({});
+    for (const cookie of cookies) {
+      if (!cookie?.domain) continue;
+      if (!cookieDomainMatchesHost(cookie.domain, targetHostname)) continue;
+      try {
+        await removeCookieByObject(cookie);
+      } catch (e) { }
+    }
+  }
+
+  if (targetOrigin) {
+    await clearSiteStorageInOpenTabs(targetOrigin);
+  }
+}
+
+async function clearSiteStorageInOpenTabs(targetOrigin) {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const matchedTabs = tabs.filter((tab) => {
+      if (!tab?.id || !tab.url) return false;
+      try {
+        return new URL(tab.url).origin === targetOrigin;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    for (const tab of matchedTabs) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          world: "MAIN",
+          func: async () => {
+            try {
+              localStorage.clear();
+            } catch (e) { }
+            try {
+              sessionStorage.clear();
+            } catch (e) { }
+
+            try {
+              if (window.indexedDB?.databases) {
+                const dbs = await window.indexedDB.databases();
+                for (const db of dbs || []) {
+                  if (db?.name) {
+                    try {
+                      indexedDB.deleteDatabase(db.name);
+                    } catch (e) { }
+                  }
+                }
+              }
+            } catch (e) { }
+
+            try {
+              if (window.caches?.keys) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map((key) => caches.delete(key)));
+              }
+            } catch (e) { }
+
+            try {
+              if (navigator.serviceWorker?.getRegistrations) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map((reg) => reg.unregister()));
+              }
+            } catch (e) { }
+          },
+        });
+      } catch (e) { }
+    }
+  } catch (e) { }
 }
 
 async function sleep(ms) {
