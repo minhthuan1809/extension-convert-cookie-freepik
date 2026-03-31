@@ -632,7 +632,6 @@ async function verifyAndSyncExpiredStatusAfterApply(profileId) {
 
     currentActiveIsExpired = true;
     await markProfileCooldownUntilNextMidnight(profileId);
-    await markProfileExpiredAndSync(profileId);
     await renderProfiles();
     setStatus("Da phat hien het han va dong bo len Database.", true);
     return;
