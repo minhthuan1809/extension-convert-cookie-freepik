@@ -51,6 +51,7 @@ async function bootstrapCloudData() {
   setStatus("Dang tai danh sach ho so...");
   await onPullCloud();
   await refreshCurrentActiveProfileFromHost();
+  await syncActiveProfileStatusFromPage();
   await renderProfiles();
 }
 
@@ -541,6 +542,17 @@ async function refreshCurrentActiveProfileFromHost() {
   } catch (error) {
     // Bo qua loi dong bo giao dien.
   }
+}
+
+async function syncActiveProfileStatusFromPage() {
+  if (!currentActiveProfileId) return;
+  const isExpired = await detectUpgradeButtonOnActiveTab();
+  currentActiveIsExpired = Boolean(isExpired);
+  if (isExpired) {
+    await markProfileCooldownUntilNextMidnight(currentActiveProfileId);
+    return;
+  }
+  await markProfileActiveAndSync(currentActiveProfileId);
 }
 
 async function onDeleteProfile(profileId) {
