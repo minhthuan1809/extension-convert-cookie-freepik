@@ -10,41 +10,44 @@
 
 <body>
   <main class="app">
-    <header class="app-header card">
+    <header class="topbar">
       <div class="brand">
-        <img class="logo" src="download.png" alt="Freepik logo" width="120" height="24" />
-        <div class="title-left">
+        <div class="logo-box">
+          <img class="logo" src="download.png" alt="Freepik logo" width="16" height="16" />
+        </div>
+        <div>
           <h1>Cookie Switcher</h1>
-          <p class="sub">Nhanh, gon, dong bo Database</p>
+          <p class="brand-sub">Freepik Account Manager</p>
         </div>
       </div>
       <p id="currentAccount" class="status">
+        <span class="account-dot"></span>
         <span id="currentAccountText">Dang tai: dang xac dinh ...</span>
       </p>
     </header>
 
-    <section class="card action-card">
-      <h2>Thao Tac Nhanh</h2>
+    <section class="card quick-actions">
       <div class="action-grid">
-        <button id="capturePushBtn" class="primary">
+        <button id="capturePushBtn" class="primary" title="Lay cookie va luu len DB">
           <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 2 9.5 5H4v16h16V5h-5.5L12 2Zm1 14.5-4-4 1.4-1.4L13 13.2l4.6-4.6L19 10l-6 6.5Z" />
           </svg>
-          <span class="btn-text">Lay cookie len DB</span>
+          <span class="btn-text">Lay cookie</span>
         </button>
-        <button id="exportBtn" class="secondary">
-          <span class="btn-text">Export DB</span>
+        <button id="exportBtn" class="secondary" title="Tai file backup DB">
+          <span class="btn-text">Export</span>
         </button>
-        <button id="importBtn" class="secondary">
-          <span class="btn-text">Import DB</span>
+        <button id="importBtn" class="secondary" title="Nhap file backup vao DB">
+          <span class="btn-text">Import</span>
         </button>
         <input id="importFile" class="sr-only" type="file" accept="application/json,.json" />
       </div>
     </section>
 
-    <section class="card">
+    <section class="card list-card">
       <div class="section-head">
-        <h2>Danh Sach Ho So</h2>
+        <h2>Danh sach ho so</h2>
+        <span id="profilesCount" class="count-badge">0 tai khoan</span>
       </div>
       <div id="profiles" class="profiles"></div>
     </section>

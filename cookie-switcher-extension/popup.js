@@ -18,6 +18,7 @@ const capturePushBtn = document.getElementById("capturePushBtn");
 const pushCloudBtn = document.getElementById("pushCloudBtn");
 const pullCloudBtn = document.getElementById("pullCloudBtn");
 const profilesContainer = document.getElementById("profiles");
+const profilesCountEl = document.getElementById("profilesCount");
 const statusEl = document.getElementById("status");
 const currentAccountEl = document.getElementById("currentAccount");
 const currentAccountTextEl = document.getElementById("currentAccountText");
@@ -446,6 +447,9 @@ async function renderProfiles() {
   const profiles = runtimeProfiles;
   const cooldownMap = await getProfileCooldownMap();
   profilesContainer.innerHTML = "";
+  if (profilesCountEl) {
+    profilesCountEl.textContent = `${profiles.length} tai khoan`;
+  }
 
   if (!profiles.length) {
     profilesContainer.innerHTML =
@@ -456,6 +460,18 @@ async function renderProfiles() {
   for (const profile of profiles) {
     const wrapper = document.createElement("div");
     wrapper.className = "profile-item";
+
+    const isActive = profile.id && currentActiveProfileId === profile.id;
+    if (isActive) {
+      wrapper.classList.add("active-profile");
+    }
+
+    const avatar = document.createElement("div");
+    avatar.className = "profile-avatar";
+    avatar.textContent = String(profile.name || "?").trim().charAt(0).toUpperCase();
+
+    const info = document.createElement("div");
+    info.className = "profile-info";
 
     const title = document.createElement("p");
     title.className = "profile-name";
@@ -470,20 +486,20 @@ async function renderProfiles() {
       typeof profile.accountNumber === "boolean"
         ? String(profile.accountNumber)
         : profile.accountNumber || "N/A";
-    const statusText = profile.status || "active";
-    meta.textContent = `${profile.data.cookies.length} cookie | ${profile.data.url} | ${transactionText} | account: ${accountText} | ${statusText}`;
+    meta.textContent = `${profile.data.cookies.length} cookie | ${profile.data.url} | ${transactionText} | ${accountText}`;
+    info.appendChild(title);
+    info.appendChild(meta);
 
     const actions = document.createElement("div");
-    actions.className = "row";
+    actions.className = "profile-actions";
 
     const applyBtn = document.createElement("button");
-    const isActive = profile.id && currentActiveProfileId === profile.id;
     const cooldownUntil = getProfileCooldownUntil(profile, cooldownMap);
     const isInCooldown = isProfileInCooldown(cooldownUntil);
     const isExpiredByStatus = String(profile.status || "").toLowerCase() === "expired";
     const isExpired =
       isExpiredByStatus || isInCooldown || (isActive && currentActiveIsExpired);
-    applyBtn.className = isExpired ? "expired" : isActive ? "active" : "";
+    applyBtn.className = `use-btn ${isExpired ? "expired" : isActive ? "active" : ""}`;
     applyBtn.disabled = Boolean(isActive);
     applyBtn.addEventListener("click", () => onApplyProfile(profile.id));
 
@@ -497,18 +513,16 @@ async function renderProfiles() {
     applyBtn.appendChild(applyText);
 
     const deleteBtn = document.createElement("button");
-    deleteBtn.className = "danger";
+    deleteBtn.className = "del-btn";
     const deleteText = document.createElement("span");
-    deleteText.className = "btn-text";
-    deleteText.textContent = "Xoa";
-    deleteBtn.appendChild(deleteText);
+    deleteBtn.appendChild(createIconSvg("trash"));
     deleteBtn.addEventListener("click", () => onDeleteProfile(profile.id));
 
     actions.appendChild(applyBtn);
     actions.appendChild(deleteBtn);
 
-    wrapper.appendChild(title);
-    wrapper.appendChild(meta);
+    wrapper.appendChild(avatar);
+    wrapper.appendChild(info);
     wrapper.appendChild(actions);
     profilesContainer.appendChild(wrapper);
   }
@@ -731,6 +745,10 @@ function setStatus(message, isError = false) {
 
 function setCurrentAccountIndicator(message, isError = false) {
   if (!currentAccountEl) return;
+  const dot = currentAccountEl.querySelector(".account-dot");
+  if (dot) {
+    dot.classList.toggle("online", !isError);
+  }
   if (currentAccountTextEl) {
     currentAccountTextEl.textContent = message;
   } else {
