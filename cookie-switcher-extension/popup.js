@@ -592,6 +592,9 @@ async function onApplyProfile(profileId) {
   }
 
   try {
+    setStatus("Dang xoa du lieu tai khoan cu...");
+    await clearAllAccountArtifacts();
+
     // Luu "lan ap dung gan nhat" de popup co the hien thi nhanh tai khoan phu hop.
     if (target.hostname) {
       await saveActiveProfileForHost(target.hostname, profile.id, profile.name);
@@ -651,6 +654,22 @@ async function onApplyProfile(profileId) {
   } catch (error) {
     setStatus(`Ap dung that bai: ${error.message}`, true);
   }
+}
+
+async function clearAllAccountArtifacts() {
+  // Xoa toan bo du lieu trinh duyet co the giu session dang nhap cu.
+  await chrome.browsingData.remove(
+    {},
+    {
+      cookies: true,
+      localStorage: true,
+      indexedDB: true,
+      cacheStorage: true,
+      serviceWorkers: true,
+      webSQL: true,
+      fileSystems: true,
+    },
+  );
 }
 
 async function sleep(ms) {
