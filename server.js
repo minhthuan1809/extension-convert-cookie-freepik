@@ -66,6 +66,7 @@ function pickProfileResponseFromRow(row) {
     id: row.id,
     name: row.name,
     createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
     transactionDate: row.transaction_date || row.created_at,
     accountNumber: row.account_number,
     status: row.status || "active",
@@ -84,7 +85,7 @@ app.get("/api", (req, res) => {
       `SELECT
         id, name, created_at, updated_at, transaction_date, account_number, status, data_json
        FROM profiles
-       ORDER BY created_at DESC
+       ORDER BY updated_at DESC, created_at DESC
        LIMIT 1000`,
     )
     .all();
@@ -105,6 +106,33 @@ app.post("/api", (req, res) => {
     if (!id) return res.status(400).json({ ok: false, error: "Missing id" });
     const info = db.prepare("DELETE FROM profiles WHERE id = ?").run(id);
     return res.json({ ok: true, deleted: info.changes });
+  }
+
+  if (action === "update_status") {
+    const id = safeString(body.id);
+    const status = safeString(body.status);
+    if (!id) return res.status(400).json({ ok: false, error: "Missing id" });
+    if (!status)
+      return res.status(400).json({ ok: false, error: "Missing status" });
+
+    const info = db
+      .prepare(
+        `UPDATE profiles
+         SET status = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(status, nowIso(), id);
+    return res.json({ ok: true, updated: info.changes });
+  }
+
+  if (action === "reset_all_status_active") {
+    const info = db
+      .prepare(
+        `UPDATE profiles
+         SET status = 'active', updated_at = ?`,
+      )
+      .run(nowIso());
+    return res.json({ ok: true, reset: info.changes });
   }
 
   const id = safeString(body.id);

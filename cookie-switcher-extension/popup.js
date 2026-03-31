@@ -478,7 +478,7 @@ async function renderProfiles() {
 
     const applyBtn = document.createElement("button");
     const isActive = profile.id && currentActiveProfileId === profile.id;
-    const cooldownUntil = cooldownMap[String(profile.id || "")] || "";
+    const cooldownUntil = getProfileCooldownUntil(profile, cooldownMap);
     const isInCooldown = isProfileInCooldown(cooldownUntil);
     const isExpiredByStatus = String(profile.status || "").toLowerCase() === "expired";
     const isExpired =
@@ -541,14 +541,17 @@ async function onApplyProfile(profileId) {
 
   const target = new URL(profile.data.url);
   const cooldownMap = await getProfileCooldownMap();
-  const cooldownUntil = cooldownMap[String(profile.id || "")] || "";
+  const cooldownUntil = getProfileCooldownUntil(profile, cooldownMap);
   const isExpiredByCooldown = isProfileInCooldown(cooldownUntil);
-  const isExpiredByStatus = String(profile.status || "").toLowerCase() === "expired";
-  if (isExpiredByCooldown || isExpiredByStatus) {
-    setStatus(`Tai khoan ${profile.name} da het han, van dang chuyen cookie.`, true);
-  } else {
-    setStatus("Dang ap dung cookie, vui long doi...");
+  if (isExpiredByCooldown) {
+    setStatus(
+      `Tai khoan ${profile.name} da het han, vui long doi qua 00:00 de mo lai.`,
+      true,
+    );
+    await renderProfiles();
+    return;
   }
+  setStatus("Dang ap dung cookie, vui long doi...");
 
   try {
     // Luu "lan ap dung gan nhat" de popup co the hien thi nhanh tai khoan phu hop.
@@ -888,7 +891,6 @@ async function updateCurrentAccountIndicator() {
       currentActiveIsExpired = await detectUpgradeButtonOnActiveTab();
       if (currentActiveIsExpired && currentActiveProfileId) {
         await markProfileCooldownUntilNextMidnight(currentActiveProfileId);
-        await markProfileExpiredAndSync(currentActiveProfileId);
       }
       setCurrentAccountIndicator(
         `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${currentActiveIsExpired ? " | Het han" : ""
@@ -908,7 +910,6 @@ async function updateCurrentAccountIndicator() {
       if (currentActiveIsExpired) {
         if (currentActiveProfileId) {
           await markProfileCooldownUntilNextMidnight(currentActiveProfileId);
-          await markProfileExpiredAndSync(currentActiveProfileId);
         }
         setCurrentAccountIndicator(
           `Dang tai: ${currentActiveProfileName} (theo lan ap dung gan nhat | Het han).`,
@@ -986,6 +987,20 @@ function isProfileInCooldown(cooldownUntil) {
   return Date.now() < untilMs;
 }
 
+function getProfileCooldownUntil(profile, cooldownMap = {}) {
+  const localValue = cooldownMap[String(profile?.id || "")] || "";
+  const remoteValue =
+    profile?.data && typeof profile.data === "object"
+      ? profile.data.cooldownUntil || ""
+      : "";
+  const localMs = new Date(localValue).getTime();
+  const remoteMs = new Date(remoteValue).getTime();
+  if (Number.isFinite(localMs) && Number.isFinite(remoteMs)) {
+    return localMs >= remoteMs ? localValue : remoteValue;
+  }
+  return Number.isFinite(localMs) ? localValue : remoteValue;
+}
+
 async function getProfileCooldownMap() {
   const stored = await chrome.storage.local.get(PROFILE_COOLDOWN_KEY);
   const raw = stored[PROFILE_COOLDOWN_KEY];
@@ -1011,15 +1026,11 @@ async function markProfileCooldownUntilNextMidnight(profileId) {
   const map = await getProfileCooldownMap();
   map[String(profileId)] = nextMidnightIso;
   await chrome.storage.local.set({ [PROFILE_COOLDOWN_KEY]: map });
-}
-
-async function markProfileExpiredAndSync(profileId) {
-  if (!profileId) return;
   const targetId = String(profileId);
   const profile = runtimeProfiles.find((item) => String(item?.id) === targetId);
   if (!profile) return;
-  if (profile.status === "expired") return;
-
+  if (!profile.data || typeof profile.data !== "object") return;
+  profile.data.cooldownUntil = nextMidnightIso;
   profile.status = "expired";
   await updateProfileInCloud(profile);
 }
@@ -1218,10 +1229,7 @@ function normalizeRemoteProfiles(rawData) {
           transactionDate: item.transactionDate || item.createdAt || "",
           accountNumber: item.accountNumber,
           status: item.status || "active",
-          _sourceGatewayRaw:
-            typeof item.gateway === "string"
-              ? item.gateway
-              : JSON.stringify(item.data),
+          _sourceGatewayRaw: JSON.stringify(item.data),
           _sourceTransactionRaw: item.transactionDate || "",
           _sourceAccountRaw: item.accountNumber,
         };
@@ -1242,10 +1250,7 @@ function normalizeRemoteProfiles(rawData) {
           transactionDate: item.transactionDate || item.createdAt || "",
           accountNumber: item.accountNumber,
           status: item.status || "active",
-          _sourceGatewayRaw:
-            typeof item.gateway === "string"
-              ? item.gateway
-              : JSON.stringify(item),
+          _sourceGatewayRaw: JSON.stringify(item),
           _sourceTransactionRaw: item.transactionDate || "",
           _sourceAccountRaw: item.accountNumber,
         };
@@ -1270,36 +1275,6 @@ function normalizeRemoteProfiles(rawData) {
               accountNumber: item.accountNumber,
               status: item.status || "active",
               _sourceGatewayRaw: item.payload,
-              _sourceTransactionRaw: item.transactionDate || "",
-              _sourceAccountRaw: item.accountNumber,
-            };
-          }
-        } catch (error) {
-          return null;
-        }
-      }
-
-      if (typeof item?.gateway === "string") {
-        try {
-          const parsedGateway = JSON.parse(item.gateway);
-          if (parsedGateway?.url && Array.isArray(parsedGateway?.cookies)) {
-            let hostName = "cloud";
-            try {
-              hostName = new URL(parsedGateway.url).hostname;
-            } catch (innerError) {
-              hostName = "cloud";
-            }
-            return {
-              id: buildStableProfileId(item, parsedGateway),
-              name: item.name || `${hostName} - cloud`,
-              createdAt: new Date().toISOString(),
-              data: parsedGateway,
-              transactionDate: item.transactionDate || "",
-              accountNumber: item.accountNumber,
-              status:
-                item.status ||
-                (item.accountNumber === true ? "active" : "inactive"),
-              _sourceGatewayRaw: item.gateway,
               _sourceTransactionRaw: item.transactionDate || "",
               _sourceAccountRaw: item.accountNumber,
             };
@@ -1356,55 +1331,6 @@ function normalizeRemoteProfiles(rawData) {
         }
       }
 
-      // Ho tro du lieu bi lech cot tu Database:
-      // gateway = so thu tu, transactionDate = JSON cookie, accountNumber = ngay ISO
-      if (
-        (typeof item?.gateway === "number" ||
-          typeof item?.gateway === "string") &&
-        typeof item?.transactionDate === "string"
-      ) {
-        try {
-          const parsedShifted = JSON.parse(item.transactionDate);
-          if (parsedShifted?.url && Array.isArray(parsedShifted?.cookies)) {
-            let hostName = "cloud";
-            try {
-              hostName = new URL(parsedShifted.url).hostname;
-            } catch (innerError) {
-              hostName = "cloud";
-            }
-
-            const normalizedDate =
-              typeof item.accountNumber === "string" ? item.accountNumber : "";
-            const normalizedAccount =
-              item.gateway !== undefined && item.gateway !== null
-                ? String(item.gateway)
-                : true;
-            const normalizedStatus =
-              item.status ||
-              (typeof item.subAccount === "boolean"
-                ? item.subAccount
-                  ? "active"
-                  : "inactive"
-                : "active");
-
-            return {
-              id: buildStableProfileId(item, parsedShifted),
-              name: item.name || `${hostName} - cloud`,
-              createdAt: new Date().toISOString(),
-              data: parsedShifted,
-              transactionDate: normalizedDate,
-              accountNumber: normalizedAccount,
-              status: normalizedStatus,
-              _sourceGatewayRaw: String(item.gateway),
-              _sourceTransactionRaw: item.transactionDate,
-              _sourceAccountRaw: item.accountNumber,
-            };
-          }
-        } catch (error) {
-          return null;
-        }
-      }
-
       return null;
     })
     .filter(Boolean);
@@ -1446,14 +1372,6 @@ function parseImportPayload(rawText) {
           pushProfile(item, item);
           continue;
         }
-        if (typeof item?.gateway === "string") {
-          try {
-            const gatewayPayload = JSON.parse(item.gateway);
-            pushProfile(gatewayPayload, item);
-          } catch (error) {
-            continue;
-          }
-        }
         if (typeof item?.cookie === "string") {
           try {
             const cookiePayload = JSON.parse(item.cookie);
@@ -1468,14 +1386,6 @@ function parseImportPayload(rawText) {
 
     if (source?.url && Array.isArray(source?.cookies)) {
       pushProfile(source, source);
-      return;
-    }
-
-    if (typeof source?.gateway === "string") {
-      try {
-        const gatewayPayload = JSON.parse(source.gateway);
-        pushProfile(gatewayPayload, source);
-      } catch (error) { }
       return;
     }
 
@@ -1533,7 +1443,6 @@ function normalizeApiInput(value) {
 function buildStableProfileId(rawItem, cookieData) {
   const parts = [
     rawItem?.id || "",
-    rawItem?.gateway || "",
     rawItem?.transactionDate || "",
     rawItem?.accountNumber || "",
     rawItem?.name || "",
