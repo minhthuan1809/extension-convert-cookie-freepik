@@ -543,15 +543,12 @@ async function onApplyProfile(profileId) {
   const cooldownMap = await getProfileCooldownMap();
   const cooldownUntil = getProfileCooldownUntil(profile, cooldownMap);
   const isExpiredByCooldown = isProfileInCooldown(cooldownUntil);
-  if (isExpiredByCooldown) {
-    setStatus(
-      `Tai khoan ${profile.name} da het han, vui long doi qua 00:00 de mo lai.`,
-      true,
-    );
-    await renderProfiles();
-    return;
+  const isExpiredByStatus = String(profile.status || "").toLowerCase() === "expired";
+  if (isExpiredByCooldown || isExpiredByStatus) {
+    setStatus(`Tai khoan ${profile.name} da het han, van dang chuyen cookie.`, true);
+  } else {
+    setStatus("Dang ap dung cookie, vui long doi...");
   }
-  setStatus("Dang ap dung cookie, vui long doi...");
 
   try {
     // Luu "lan ap dung gan nhat" de popup co the hien thi nhanh tai khoan phu hop.
@@ -636,6 +633,10 @@ async function verifyAndSyncExpiredStatusAfterApply(profileId) {
     setStatus("Da phat hien het han va dong bo len Database.", true);
     return;
   }
+
+  currentActiveIsExpired = false;
+  await markProfileActiveAndSync(profileId);
+  await renderProfiles();
 }
 
 async function setCookieFromObject(cookie, fallbackOrigin) {
@@ -890,6 +891,8 @@ async function updateCurrentAccountIndicator() {
       currentActiveIsExpired = await detectUpgradeButtonOnActiveTab();
       if (currentActiveIsExpired && currentActiveProfileId) {
         await markProfileCooldownUntilNextMidnight(currentActiveProfileId);
+      } else if (currentActiveProfileId) {
+        await markProfileActiveAndSync(currentActiveProfileId);
       }
       setCurrentAccountIndicator(
         `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${currentActiveIsExpired ? " | Het han" : ""
@@ -913,6 +916,8 @@ async function updateCurrentAccountIndicator() {
         setCurrentAccountIndicator(
           `Dang tai: ${currentActiveProfileName} (theo lan ap dung gan nhat | Het han).`,
         );
+      } else if (currentActiveProfileId) {
+        await markProfileActiveAndSync(currentActiveProfileId);
       }
       return;
     }
@@ -1031,6 +1036,31 @@ async function markProfileCooldownUntilNextMidnight(profileId) {
   if (!profile.data || typeof profile.data !== "object") return;
   profile.data.cooldownUntil = nextMidnightIso;
   profile.status = "expired";
+  await updateProfileInCloud(profile);
+}
+
+async function clearProfileCooldown(profileId) {
+  if (!profileId) return;
+  const key = String(profileId);
+  const map = await getProfileCooldownMap();
+  if (Object.prototype.hasOwnProperty.call(map, key)) {
+    delete map[key];
+    await chrome.storage.local.set({ [PROFILE_COOLDOWN_KEY]: map });
+  }
+  const profile = runtimeProfiles.find((item) => String(item?.id) === key);
+  if (profile?.data && typeof profile.data === "object") {
+    delete profile.data.cooldownUntil;
+  }
+}
+
+async function markProfileActiveAndSync(profileId) {
+  if (!profileId) return;
+  const targetId = String(profileId);
+  const profile = runtimeProfiles.find((item) => String(item?.id) === targetId);
+  if (!profile) return;
+  await clearProfileCooldown(targetId);
+  if (String(profile.status || "").toLowerCase() === "active") return;
+  profile.status = "active";
   await updateProfileInCloud(profile);
 }
 
