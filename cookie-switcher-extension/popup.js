@@ -1,5 +1,5 @@
 const API_URL_KEY = "cloudApiUrl";
-const DEFAULT_API_URL = "http://localhost:3333/api";
+const DEFAULT_API_URL = "https://extension-convert-cookie-freepik--thuan18092003.replit.app/";
 let runtimeProfiles = [];
 let currentActiveProfileId = "";
 let currentActiveProfileName = "";
@@ -207,13 +207,13 @@ async function onImportFile(event) {
 async function onSaveApiUrl() {
   const rawInput = apiUrlInput.value.trim();
   if (!rawInput) {
-    setStatus("Vui long nhap URL hoac ID trien khai.", true);
+    setStatus("Vui long nhap URL API.", true);
     return;
   }
 
   const normalizedUrl = normalizeApiInput(rawInput);
   if (!normalizedUrl) {
-    setStatus("Gia tri khong hop le. Nhap URL hoac ID trien khai.", true);
+    setStatus("Gia tri khong hop le. Vui long nhap URL API hop le.", true);
     return;
   }
 
@@ -1364,28 +1364,22 @@ function formatTransactionDate(isoDate) {
   }
 }
 
-function buildAppsScriptUrlFromId(deploymentId) {
-  return `https://script.google.com/macros/s/${deploymentId}/exec`;
-}
-
-function looksLikeDeploymentId(value) {
-  return /^AKf[a-zA-Z0-9_-]{20,}$/.test(value);
-}
-
 function normalizeApiInput(value) {
   const raw = String(value || "").trim();
   if (!raw) {
     return "";
   }
 
-  if (looksLikeDeploymentId(raw)) {
-    return buildAppsScriptUrlFromId(raw);
-  }
-
   try {
     const parsed = new URL(raw);
     if (!/^https?:$/.test(parsed.protocol)) {
       return "";
+    }
+    if (!parsed.pathname || parsed.pathname === "/") {
+      parsed.pathname = "/api";
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.toString();
     }
     return raw;
   } catch (error) {
