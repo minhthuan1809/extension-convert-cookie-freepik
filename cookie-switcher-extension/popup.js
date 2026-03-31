@@ -23,6 +23,7 @@ const currentAccountEl = document.getElementById("currentAccount");
 const currentAccountTextEl = document.getElementById("currentAccountText");
 
 const ACTIVE_BY_HOST_KEY = "activeByHostProfile";
+const PROFILE_COOLDOWN_KEY = "profileCooldownUntil";
 const CURRENT_ACCOUNT_RECHECK_DELAY_MS = 1500;
 
 init();
@@ -365,11 +366,6 @@ async function onExportBackup() {
     }
 
     const pulledProfiles = normalizeRemoteProfiles(data);
-    if (!pulledProfiles.length) {
-      setStatus("Khong co du lieu de export.", true);
-      return;
-    }
-
     const exportItems = pulledProfiles
       .map((profile) => {
         const cookiePayload = profile?.data || {};
@@ -388,12 +384,22 @@ async function onExportBackup() {
         (item) => typeof item?.url === "string" && Array.isArray(item?.cookies),
       );
 
-    const fileText = JSON.stringify(exportItems, null, 2);
+    const fileText = JSON.stringify(
+      {
+        format: "cookie-switcher-full-db-v1",
+        exportedAt: new Date().toISOString(),
+        sourceApi: apiUrl,
+        raw: data,
+        profiles: exportItems,
+      },
+      null,
+      2,
+    );
     const safeDate = new Date()
       .toISOString()
       .slice(0, 19)
       .replace(/[:T]/g, "-");
-    const filename = `cookie-backup-${safeDate}.json`;
+    const filename = `cookie-db-full-backup-${safeDate}.json`;
     const blob = new Blob([fileText], {
       type: "application/json;charset=utf-8",
     });
@@ -407,7 +413,9 @@ async function onExportBackup() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 
-    setStatus(`Da export ${exportItems.length} ho so backup.`);
+    setStatus(
+      `Da export toan bo DB. So profile doc duoc: ${exportItems.length}.`,
+    );
   } catch (error) {
     setStatus(`Xuat backup that bai: ${error.message}`, true);
   }
@@ -434,6 +442,7 @@ function createIconSvg(kind) {
 
 async function renderProfiles() {
   const profiles = runtimeProfiles;
+  const cooldownMap = await getProfileCooldownMap();
   profilesContainer.innerHTML = "";
 
   if (!profiles.length) {
@@ -467,13 +476,22 @@ async function renderProfiles() {
 
     const applyBtn = document.createElement("button");
     const isActive = profile.id && currentActiveProfileId === profile.id;
-    applyBtn.className = isActive ? "active" : "";
+    const cooldownUntil = cooldownMap[String(profile.id || "")] || "";
+    const isInCooldown = isProfileInCooldown(cooldownUntil);
+    const isExpiredByStatus = String(profile.status || "").toLowerCase() === "expired";
+    const isExpired =
+      isExpiredByStatus || isInCooldown || (isActive && currentActiveIsExpired);
+    applyBtn.className = isExpired ? "expired" : isActive ? "active" : "";
     applyBtn.disabled = Boolean(isActive);
     applyBtn.addEventListener("click", () => onApplyProfile(profile.id));
 
     const applyText = document.createElement("span");
     applyText.className = "btn-text";
-    applyText.textContent = isActive ? "Dang dung" : "Chuyen";
+    applyText.textContent = isActive
+      ? "Dang dung"
+      : isExpired
+        ? "Chuyen (Het han)"
+        : "Chuyen";
     applyBtn.appendChild(applyText);
 
     const deleteBtn = document.createElement("button");
@@ -520,7 +538,15 @@ async function onApplyProfile(profileId) {
   }
 
   const target = new URL(profile.data.url);
-  setStatus("Dang ap dung cookie, vui long doi...");
+  const cooldownMap = await getProfileCooldownMap();
+  const cooldownUntil = cooldownMap[String(profile.id || "")] || "";
+  const isExpiredByCooldown = isProfileInCooldown(cooldownUntil);
+  const isExpiredByStatus = String(profile.status || "").toLowerCase() === "expired";
+  if (isExpiredByCooldown || isExpiredByStatus) {
+    setStatus(`Tai khoan ${profile.name} da het han, van dang chuyen cookie.`, true);
+  } else {
+    setStatus("Dang ap dung cookie, vui long doi...");
+  }
 
   try {
     // Luu "lan ap dung gan nhat" de popup co the hien thi nhanh tai khoan phu hop.
@@ -832,6 +858,10 @@ async function updateCurrentAccountIndicator() {
       );
       // Kiem tra trang dang mo xem co nut "Upgrade" khong (du doan het han).
       currentActiveIsExpired = await detectUpgradeButtonOnActiveTab();
+      if (currentActiveIsExpired && currentActiveProfileId) {
+        await markProfileCooldownUntilNextMidnight(currentActiveProfileId);
+        await markProfileExpiredAndSync(currentActiveProfileId);
+      }
       setCurrentAccountIndicator(
         `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${currentActiveIsExpired ? " | Het han" : ""
         }).`,
@@ -848,6 +878,10 @@ async function updateCurrentAccountIndicator() {
       );
       currentActiveIsExpired = await detectUpgradeButtonOnActiveTab();
       if (currentActiveIsExpired) {
+        if (currentActiveProfileId) {
+          await markProfileCooldownUntilNextMidnight(currentActiveProfileId);
+          await markProfileExpiredAndSync(currentActiveProfileId);
+        }
         setCurrentAccountIndicator(
           `Dang tai: ${currentActiveProfileName} (theo lan ap dung gan nhat | Het han).`,
         );
@@ -908,6 +942,58 @@ async function detectUpgradeButtonOnActiveTab() {
   } catch (e) {
     return false;
   }
+}
+
+function getNextMidnightIso() {
+  const now = new Date();
+  const nextMidnight = new Date(now);
+  nextMidnight.setHours(24, 0, 0, 0);
+  return nextMidnight.toISOString();
+}
+
+function isProfileInCooldown(cooldownUntil) {
+  if (!cooldownUntil) return false;
+  const untilMs = new Date(cooldownUntil).getTime();
+  if (!Number.isFinite(untilMs)) return false;
+  return Date.now() < untilMs;
+}
+
+async function getProfileCooldownMap() {
+  const stored = await chrome.storage.local.get(PROFILE_COOLDOWN_KEY);
+  const raw = stored[PROFILE_COOLDOWN_KEY];
+  const map = raw && typeof raw === "object" ? raw : {};
+  return cleanupExpiredCooldownMap(map);
+}
+
+function cleanupExpiredCooldownMap(map) {
+  const cleaned = {};
+  const now = Date.now();
+  for (const [key, value] of Object.entries(map || {})) {
+    const untilMs = new Date(value).getTime();
+    if (Number.isFinite(untilMs) && untilMs > now) {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
+}
+
+async function markProfileCooldownUntilNextMidnight(profileId) {
+  if (!profileId) return;
+  const nextMidnightIso = getNextMidnightIso();
+  const map = await getProfileCooldownMap();
+  map[String(profileId)] = nextMidnightIso;
+  await chrome.storage.local.set({ [PROFILE_COOLDOWN_KEY]: map });
+}
+
+async function markProfileExpiredAndSync(profileId) {
+  if (!profileId) return;
+  const targetId = String(profileId);
+  const profile = runtimeProfiles.find((item) => String(item?.id) === targetId);
+  if (!profile) return;
+  if (profile.status === "expired") return;
+
+  profile.status = "expired";
+  await updateProfileInCloud(profile);
 }
 
 async function saveProfileToCloud(profile) {
@@ -1299,6 +1385,7 @@ function normalizeRemoteProfiles(rawData) {
 function parseImportPayload(rawText) {
   const parsed = JSON.parse(rawText);
   const result = [];
+  const idSet = new Set();
 
   const pushProfile = (cookiePayload, meta = {}) => {
     const validated = validateCookiePayload(cookiePayload);
@@ -1308,7 +1395,7 @@ function parseImportPayload(rawText) {
     } catch (error) {
       hostName = "profile";
     }
-    result.push({
+    const profileItem = {
       id: meta?.id ? String(meta.id) : crypto.randomUUID(),
       name:
         meta.name || `${hostName} - nhap ${new Date().toLocaleString("vi-VN")}`,
@@ -1317,36 +1404,64 @@ function parseImportPayload(rawText) {
       transactionDate: meta.transactionDate || new Date().toISOString(),
       accountNumber: meta.accountNumber ?? true,
       status: meta.status || "active",
-    });
+    };
+    const dedupeId = String(profileItem.id || "");
+    if (dedupeId && idSet.has(dedupeId)) return;
+    if (dedupeId) idSet.add(dedupeId);
+    result.push(profileItem);
   };
 
-  if (Array.isArray(parsed)) {
-    for (const item of parsed) {
-      if (item?.url && Array.isArray(item?.cookies)) {
-        pushProfile(item, item);
-        continue;
-      }
-      if (typeof item?.gateway === "string") {
-        try {
-          const gatewayPayload = JSON.parse(item.gateway);
-          pushProfile(gatewayPayload, item);
-        } catch (error) {
+  const appendFromAny = (source) => {
+    if (Array.isArray(source)) {
+      for (const item of source) {
+        if (item?.url && Array.isArray(item?.cookies)) {
+          pushProfile(item, item);
           continue;
         }
+        if (typeof item?.gateway === "string") {
+          try {
+            const gatewayPayload = JSON.parse(item.gateway);
+            pushProfile(gatewayPayload, item);
+          } catch (error) {
+            continue;
+          }
+        }
+        if (typeof item?.cookie === "string") {
+          try {
+            const cookiePayload = JSON.parse(item.cookie);
+            pushProfile(cookiePayload, item);
+          } catch (error) {
+            continue;
+          }
+        }
       }
+      return;
     }
-    return result;
-  }
 
-  if (parsed?.url && Array.isArray(parsed?.cookies)) {
-    pushProfile(parsed, parsed);
-    return result;
-  }
+    if (source?.url && Array.isArray(source?.cookies)) {
+      pushProfile(source, source);
+      return;
+    }
 
-  if (typeof parsed?.gateway === "string") {
-    const gatewayPayload = JSON.parse(parsed.gateway);
-    pushProfile(gatewayPayload, parsed);
-    return result;
+    if (typeof source?.gateway === "string") {
+      try {
+        const gatewayPayload = JSON.parse(source.gateway);
+        pushProfile(gatewayPayload, source);
+      } catch (error) { }
+      return;
+    }
+
+    if (typeof source?.cookie === "string") {
+      try {
+        const cookiePayload = JSON.parse(source.cookie);
+        pushProfile(cookiePayload, source);
+      } catch (error) { }
+    }
+  };
+
+  appendFromAny(parsed?.raw ?? parsed);
+  if (Array.isArray(parsed?.profiles)) {
+    appendFromAny(parsed.profiles);
   }
 
   return result;

@@ -1,52 +1,58 @@
 <!doctype html>
 <html lang="vi">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Trinh Chuyen Doi Cookie</title>
-    <link rel="stylesheet" href="popup.css" />
-  </head>
-  <body>
-    <main class="app">
-      <header class="app-header">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trinh Chuyen Doi Cookie</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+
+<body>
+  <main class="app">
+    <header class="app-header card">
+      <div class="brand">
+        <img class="logo" src="download.png" alt="Freepik logo" width="120" height="24" />
         <div class="title-left">
-          <div class="title-row">
-            <img
-              class="logo"
-              src="download.png"
-              alt="Freepik logo"
-              width="120"
-              height="24"
-            />
-            <h1>Trinh Chuyen Doi Cookie</h1>
-          </div>
-          <p class="sub">Luu nhanh - chuyen nhanh</p>
+          <h1>Cookie Switcher</h1>
+          <p class="sub">Nhanh, gon, dong bo Database</p>
         </div>
-      </header>
-      <section class="card compact">
-        <h2>Luu Cookie Len Database</h2>
-        <div class="row">
-          <button id="capturePushBtn">
-            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 2 9.5 5H4v16h16V5h-5.5L12 2Zm1 14.5-4-4 1.4-1.4L13 13.2l4.6-4.6L19 10l-6 6.5Z"
-              />
-            </svg>
-            <span class="btn-text">Lay cookie len Database</span>
-          </button>
-        </div>
-      </section>
+      </div>
+      <p id="currentAccount" class="status">
+        <span id="currentAccountText">Dang tai: dang xac dinh ...</span>
+      </p>
+    </header>
 
-      <section class="card">
-        <div class="section-head">
-          <h2>Danh Sach Ho So</h2>
-        </div>
-        <div id="profiles" class="profiles"></div>
-      </section>
+    <section class="card action-card">
+      <h2>Thao Tac Nhanh</h2>
+      <div class="action-grid">
+        <button id="capturePushBtn" class="primary">
+          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2 9.5 5H4v16h16V5h-5.5L12 2Zm1 14.5-4-4 1.4-1.4L13 13.2l4.6-4.6L19 10l-6 6.5Z" />
+          </svg>
+          <span class="btn-text">Lay cookie len DB</span>
+        </button>
+        <button id="exportBtn" class="secondary">
+          <span class="btn-text">Export DB</span>
+        </button>
+        <button id="importBtn" class="secondary">
+          <span class="btn-text">Import DB</span>
+        </button>
+        <input id="importFile" class="sr-only" type="file" accept="application/json,.json" />
+      </div>
+    </section>
 
-      <p id="status" class="status"></p>
-    </main>
+    <section class="card">
+      <div class="section-head">
+        <h2>Danh Sach Ho So</h2>
+      </div>
+      <div id="profiles" class="profiles"></div>
+    </section>
 
-    <script src="popup.js"></script>
-  </body>
+    <p id="status" class="status"></p>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+
 </html>
