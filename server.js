@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 3333);
 const DB_PATH = process.env.DB_PATH || "profiles.sqlite";
 
 const db = new Database(DB_PATH);

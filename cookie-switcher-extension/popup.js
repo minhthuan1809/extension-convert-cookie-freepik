@@ -1,5 +1,5 @@
 const API_URL_KEY = "cloudApiUrl";
-const DEFAULT_API_URL = "http://localhost:3000/api";
+const DEFAULT_API_URL = "http://localhost:3333/api";
 let runtimeProfiles = [];
 let currentActiveProfileId = "";
 let currentActiveProfileName = "";
@@ -575,7 +575,7 @@ async function onApplyProfile(profileId) {
       (async () => {
         await updateCurrentAccountIndicator();
         await renderProfiles();
-      })().catch(() => {});
+      })().catch(() => { });
     }, CURRENT_ACCOUNT_RECHECK_DELAY_MS);
   } catch (error) {
     setStatus(`Ap dung that bai: ${error.message}`, true);
@@ -745,7 +745,7 @@ async function matchProfileByCookies(hostname) {
     let profileHost = "";
     try {
       profileHost = new URL(profileUrl).hostname || "";
-    } catch (e) {}
+    } catch (e) { }
 
     if (profileHost && !cookieDomainMatchesHost(profileHost, hostname))
       continue;
@@ -827,15 +827,13 @@ async function updateCurrentAccountIndicator() {
       currentActiveProfileId = best.profileId;
       currentActiveProfileName = best.profileName || "";
       setCurrentAccountIndicator(
-        `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${
-          currentActiveIsExpired ? " | Het han" : ""
+        `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${currentActiveIsExpired ? " | Het han" : ""
         }).`,
       );
       // Kiem tra trang dang mo xem co nut "Upgrade" khong (du doan het han).
       currentActiveIsExpired = await detectUpgradeButtonOnActiveTab();
       setCurrentAccountIndicator(
-        `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${
-          currentActiveIsExpired ? " | Het han" : ""
+        `Dang tai: ${currentActiveProfileName} (khop cookie ${best.matchCount}/${best.total}${currentActiveIsExpired ? " | Het han" : ""
         }).`,
       );
       return;
