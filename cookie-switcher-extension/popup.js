@@ -25,6 +25,8 @@ const currentAccountTextEl = document.getElementById("currentAccountText");
 const ACTIVE_BY_HOST_KEY = "activeByHostProfile";
 const PROFILE_COOLDOWN_KEY = "profileCooldownUntil";
 const CURRENT_ACCOUNT_RECHECK_DELAY_MS = 1500;
+const EXPIRED_RECHECK_ATTEMPTS = 5;
+const EXPIRED_RECHECK_INTERVAL_MS = 1800;
 
 init();
 
@@ -603,8 +605,34 @@ async function onApplyProfile(profileId) {
         await renderProfiles();
       })().catch(() => { });
     }, CURRENT_ACCOUNT_RECHECK_DELAY_MS);
+
+    // Recheck nhieu lan sau khi chuyen de dam bao detect "Het han",
+    // va dong bo status expired len DB ngay khi phat hien.
+    void verifyAndSyncExpiredStatusAfterApply(profile.id);
   } catch (error) {
     setStatus(`Ap dung that bai: ${error.message}`, true);
+  }
+}
+
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function verifyAndSyncExpiredStatusAfterApply(profileId) {
+  if (!profileId) return;
+  for (let i = 0; i < EXPIRED_RECHECK_ATTEMPTS; i += 1) {
+    if (i > 0) {
+      await sleep(EXPIRED_RECHECK_INTERVAL_MS);
+    }
+    const isExpired = await detectUpgradeButtonOnActiveTab();
+    if (!isExpired) continue;
+
+    currentActiveIsExpired = true;
+    await markProfileCooldownUntilNextMidnight(profileId);
+    await markProfileExpiredAndSync(profileId);
+    await renderProfiles();
+    setStatus("Da phat hien het han va dong bo len Database.", true);
+    return;
   }
 }
 
