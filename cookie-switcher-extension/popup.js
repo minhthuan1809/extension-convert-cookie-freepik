@@ -658,18 +658,21 @@ async function onApplyProfile(profileId) {
 
 async function clearAllAccountArtifacts() {
   // Xoa toan bo du lieu trinh duyet co the giu session dang nhap cu.
-  await chrome.browsingData.remove(
-    {},
-    {
-      cookies: true,
-      localStorage: true,
-      indexedDB: true,
-      cacheStorage: true,
-      serviceWorkers: true,
-      webSQL: true,
-      fileSystems: true,
-    },
-  );
+  const removeBrowsingData = chrome?.browsingData?.remove;
+  if (typeof removeBrowsingData !== "function") {
+    // Trong mot so lan popup chua duoc reload sau khi cap nhat permission.
+    return;
+  }
+
+  await removeBrowsingData.call(chrome.browsingData, {}, {
+    cookies: true,
+    localStorage: true,
+    indexedDB: true,
+    cacheStorage: true,
+    serviceWorkers: true,
+    webSQL: true,
+    fileSystems: true,
+  });
 }
 
 async function sleep(ms) {
