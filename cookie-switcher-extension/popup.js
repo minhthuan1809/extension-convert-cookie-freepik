@@ -20,8 +20,6 @@ const pullCloudBtn = document.getElementById("pullCloudBtn");
 const profilesContainer = document.getElementById("profiles");
 const profilesCountEl = document.getElementById("profilesCount");
 const statusEl = document.getElementById("status");
-const currentAccountEl = document.getElementById("currentAccount");
-const currentAccountTextEl = document.getElementById("currentAccountText");
 
 const ACTIVE_BY_HOST_KEY = "activeByHostProfile";
 const PROFILE_COOLDOWN_KEY = "profileCooldownUntil";
@@ -52,8 +50,7 @@ async function bootstrapCloudData() {
   await loadApiUrl();
   setStatus("Dang tai danh sach ho so...");
   await onPullCloud();
-  await updateCurrentAccountIndicator();
-  // Cap nhat label nut theo tai khoan dang dung.
+  await refreshCurrentActiveProfileFromHost();
   await renderProfiles();
 }
 
@@ -444,6 +441,7 @@ function createIconSvg(kind) {
 }
 
 async function renderProfiles() {
+  await refreshCurrentActiveProfileFromHost();
   const profiles = runtimeProfiles;
   const cooldownMap = await getProfileCooldownMap();
   profilesContainer.innerHTML = "";
@@ -528,6 +526,23 @@ async function renderProfiles() {
   }
 }
 
+async function refreshCurrentActiveProfileFromHost() {
+  try {
+    const hostname = await getActiveTabHostname();
+    if (!hostname) return;
+
+    const stored = await chrome.storage.local.get(ACTIVE_BY_HOST_KEY);
+    const activeByHost = stored[ACTIVE_BY_HOST_KEY] || {};
+    const last = activeByHost[hostname];
+    if (!last?.profileId) return;
+
+    currentActiveProfileId = String(last.profileId);
+    currentActiveProfileName = String(last.profileName || "");
+  } catch (error) {
+    // Bo qua loi dong bo giao dien.
+  }
+}
+
 async function onDeleteProfile(profileId) {
   const profiles = runtimeProfiles;
   const profile = profiles.find((item) => item.id === profileId);
@@ -567,7 +582,6 @@ async function onApplyProfile(profileId) {
   try {
     // Luu "lan ap dung gan nhat" de popup co the hien thi nhanh tai khoan phu hop.
     if (target.hostname) {
-      setCurrentAccountIndicator(`Dang tai: ${profile.name}`);
       await saveActiveProfileForHost(target.hostname, profile.id, profile.name);
     }
     // Hien thi ngay "Dang dung" cho profile vua duoc chuyen sang.
@@ -615,7 +629,6 @@ async function onApplyProfile(profileId) {
     // Sau khi reload/tab open, cookie co the duoc cap nhat. Recheck de hien thi "khop cookie".
     setTimeout(() => {
       (async () => {
-        await updateCurrentAccountIndicator();
         await renderProfiles();
       })().catch(() => { });
     }, CURRENT_ACCOUNT_RECHECK_DELAY_MS);
@@ -744,17 +757,7 @@ function setStatus(message, isError = false) {
 }
 
 function setCurrentAccountIndicator(message, isError = false) {
-  if (!currentAccountEl) return;
-  const dot = currentAccountEl.querySelector(".account-dot");
-  if (dot) {
-    dot.classList.toggle("online", !isError);
-  }
-  if (currentAccountTextEl) {
-    currentAccountTextEl.textContent = message;
-  } else {
-    currentAccountEl.textContent = message;
-  }
-  currentAccountEl.className = `status ${isError ? "error" : "ok"}`;
+  return;
 }
 
 async function saveActiveProfileForHost(hostname, profileId, profileName) {
