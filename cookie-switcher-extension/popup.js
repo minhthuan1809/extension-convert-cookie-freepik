@@ -1,5 +1,5 @@
 const API_URL_KEY = "cloudApiUrl";
-const DEFAULT_API_URL = "https://extension-convert-cookie-freepik--thuan18092003.replit.app";
+const DEFAULT_API_URL = "https://elegant-expression-production-59f0.up.railway.app/";
 let runtimeProfiles = [];
 let currentActiveProfileId = "";
 let currentActiveProfileName = "";
